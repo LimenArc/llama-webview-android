@@ -35,8 +35,12 @@ class MainActivity : AppCompatActivity() {
      * Bridge exposed to assets/index.html as `window.Native`. Phase 1 wires the plumbing
      * only; real implementations land in later phases (server lifecycle, model directory
      * picker, etc).
+     *
+     * Must not be a private class: WebView's JS bridge invokes these methods via
+     * reflection, and a private declaring class can trip IllegalAccessException on some
+     * WebView/Chromium builds even though the methods themselves are public.
      */
-    private class NativeBridge(private val activity: MainActivity) {
+    class NativeBridge(private val activity: MainActivity) {
 
         @JavascriptInterface
         fun listModels(): String {
