@@ -59,6 +59,11 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
+            // index.html/style.css/app.js are loaded from the same file:// URL on every
+            // build, so nothing else invalidates a prior install's cached copies of them -
+            // every APK update needs the freshest assets, not whatever an old build cached.
+            settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            clearCache(true)
             webViewClient = WebViewClient()
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
