@@ -19,6 +19,8 @@
     stopBtn: document.getElementById('stop-btn'),
     contextBar: document.getElementById('context-bar'),
     togglePanel: document.getElementById('toggle-panel'),
+    hidePanelBtn: document.getElementById('btn-hide-panel'),
+    showPanelBtn: document.getElementById('btn-show-panel'),
     sidePanel: document.getElementById('side-panel'),
     modelPath: document.getElementById('model-path'),
     port: document.getElementById('port'),
@@ -321,6 +323,16 @@
 
   el.togglePanel.addEventListener('click', () => {
     el.sidePanel.classList.toggle('collapsed');
+  });
+
+  // Extra, more reachable panel controls: one next to Start/Stop (to get back to a
+  // full-width chat), one in the composer (to get back to the panel from there). Both just
+  // drive the same "collapsed" class the topbar button already uses.
+  el.hidePanelBtn.addEventListener('click', () => {
+    el.sidePanel.classList.add('collapsed');
+  });
+  el.showPanelBtn.addEventListener('click', () => {
+    el.sidePanel.classList.remove('collapsed');
   });
 
   // ---------------------------------------------------------------------
