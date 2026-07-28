@@ -189,7 +189,9 @@ body {
   transition: margin-right 0.15s ease;
 }
 
-.side-panel.collapsed {
+/* .panel-open on .layout is the single source of truth for panel visibility, in both the
+   desktop (side-by-side) and mobile (full-screen swap, see the media query below) layouts. */
+.layout:not(.panel-open) .side-panel {
   margin-right: -320px;
 }
 
@@ -281,40 +283,23 @@ body {
 .state-failed { color: var(--error); }
 .state-stopped { color: var(--dim); }
 
-.scrim {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 19;
-}
-
-.scrim.visible {
-  display: block;
-}
-
-/* Below this width (covers virtually all phones, portrait or landscape) a permanently
-   visible 320px panel would leave little to no room for the chat column, so the panel
-   becomes a full-height overlay drawer instead: closed by default, slid in over the chat
-   (with a dismissible scrim) rather than squeezed in beside it. */
+/* Below this width (covers virtually all phones, portrait or landscape) there isn't room
+   for chat + panel side by side, so instead of layering a partial overlay on top of the
+   chat (fragile: position/z-index/transform all have to line up exactly right, and it's
+   been wrong twice), the toggle button just swaps between two full-screen views. Whichever
+   one isn't showing is plain "display: none" - out of the layout entirely, nothing to
+   overlap or mis-position. */
 @media (max-width: 900px) {
-  /* Same specificity as, and later than, the desktop ".side-panel.collapsed" rule above,
-     so this wins the cascade here and the two collapse mechanisms don't stack. */
-  .side-panel,
-  .side-panel.collapsed {
-    margin-right: 0;
-  }
   .side-panel {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(85vw, 340px);
-    z-index: 20;
-    transform: translateX(100%);
-    transition: transform 0.2s ease;
+    display: none;
+    width: 100%;
+    flex: 1 1 auto;
+    border-left: none;
   }
-  .side-panel:not(.collapsed) {
-    transform: translateX(0);
+  .layout.panel-open .chat-col {
+    display: none;
+  }
+  .layout.panel-open .side-panel {
+    display: flex;
   }
 }
