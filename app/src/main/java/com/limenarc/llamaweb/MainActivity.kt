@@ -4,12 +4,16 @@ import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.EditText
@@ -44,11 +48,26 @@ class MainActivity : AppCompatActivity() {
             // show a visible notification.
         }
 
+        val isDebuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebuggable) {
+            // Lets a computer with adb + chrome://inspect see the live DOM and console for
+            // this WebView - the only way to actually debug page issues found on-device.
+            WebView.setWebContentsDebuggingEnabled(true)
+        }
+
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
             webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onConsoleMessage(message: ConsoleMessage): Boolean {
+                    if (isDebuggable) {
+                        Log.d("WebConsole", "${message.message()} (${message.sourceId()}:${message.lineNumber()})")
+                    }
+                    return true
+                }
+            }
             addJavascriptInterface(NativeBridge(this@MainActivity), "Native")
             loadUrl("file:///android_asset/index.html")
         }
