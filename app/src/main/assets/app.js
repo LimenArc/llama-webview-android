@@ -19,7 +19,6 @@
     stopBtn: document.getElementById('stop-btn'),
     contextBar: document.getElementById('context-bar'),
     togglePanel: document.getElementById('toggle-panel'),
-    layout: document.getElementById('layout'),
     sidePanel: document.getElementById('side-panel'),
     modelPath: document.getElementById('model-path'),
     port: document.getElementById('port'),
@@ -320,19 +319,8 @@
   }
   el.composerInput.addEventListener('input', autoResize);
 
-  // ".panel-open" on #layout is the single source of truth for panel visibility, in both
-  // the desktop (side-by-side) and mobile (full-screen swap) layouts - see style.css.
-  function setPanelOpen(open) {
-    el.layout.classList.toggle('panel-open', open);
-  }
-
-  // Below 900px (effectively every phone, portrait or landscape) there's no room for chat
-  // + panel side by side, so start with the panel closed there; desktop keeps the previous
-  // always-open-by-default behavior.
-  setPanelOpen(!window.matchMedia('(max-width: 900px)').matches);
-
   el.togglePanel.addEventListener('click', () => {
-    setPanelOpen(!el.layout.classList.contains('panel-open'));
+    el.sidePanel.classList.toggle('collapsed');
   });
 
   // ---------------------------------------------------------------------

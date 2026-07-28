@@ -186,13 +186,13 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  transition: margin-right 0.15s ease;
 }
 
-/* .panel-open on .layout is the single source of truth for panel visibility, in both the
-   desktop (side-by-side) and mobile (full-screen swap, see the media query below) layouts. */
-.layout:not(.panel-open) .side-panel {
-  margin-right: -320px;
+/* display:none rather than a negative margin: margin-based collapse doesn't reliably hide
+   a fixed-position element, which is exactly the case this needs to also work correctly
+   for at narrow (phone) widths - see the media query below. */
+.side-panel.collapsed {
+  display: none;
 }
 
 .panel-section h2 {
@@ -282,24 +282,3 @@ body {
 .state-starting { color: var(--warn); }
 .state-failed { color: var(--error); }
 .state-stopped { color: var(--dim); }
-
-/* Below this width (covers virtually all phones, portrait or landscape) there isn't room
-   for chat + panel side by side, so instead of layering a partial overlay on top of the
-   chat (fragile: position/z-index/transform all have to line up exactly right, and it's
-   been wrong twice), the toggle button just swaps between two full-screen views. Whichever
-   one isn't showing is plain "display: none" - out of the layout entirely, nothing to
-   overlap or mis-position. */
-@media (max-width: 900px) {
-  .side-panel {
-    display: none;
-    width: 100%;
-    flex: 1 1 auto;
-    border-left: none;
-  }
-  .layout.panel-open .chat-col {
-    display: none;
-  }
-  .layout.panel-open .side-panel {
-    display: flex;
-  }
-}
