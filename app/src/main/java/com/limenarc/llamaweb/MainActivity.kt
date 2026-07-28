@@ -22,8 +22,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowCompat
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -37,6 +36,13 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Apps targeting API 35 get edge-to-edge enforced by the OS on Android 15+: content
+        // draws behind the status bar and navigation bar by default. Padding the WebView by
+        // the reported system-bar insets didn't reliably work (WebView doesn't forward
+        // window insets the way a plain View does), so opt the whole window back out of
+        // edge-to-edge instead - simpler, and doesn't depend on inset dispatch at all.
+        WindowCompat.setDecorFitsSystemWindows(window, true)
 
         manageStorageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (hasAllFilesAccess()) {
@@ -79,17 +85,6 @@ class MainActivity : AppCompatActivity() {
             loadUrl("file:///android_asset/index.html")
         }
         setContentView(webView)
-
-        // Apps targeting API 35 get edge-to-edge enforced by the OS on Android 15+: content
-        // draws behind the status bar and navigation bar by default, and the app is
-        // responsible for insetting around them. Without this, the topbar (which sits right
-        // at the very top of the page) renders partly or fully underneath the status bar -
-        // present but not visibly readable or tappable.
-        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            insets
-        }
     }
 
     override fun onDestroy() {
