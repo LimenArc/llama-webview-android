@@ -205,6 +205,12 @@ class MainActivity : AppCompatActivity() {
     class NativeBridge(private val activity: MainActivity) {
 
         @JavascriptInterface
+        fun getModelsDir(): String {
+            val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            return prefs.getString(KEY_MODELS_DIR, null) ?: ""
+        }
+
+        @JavascriptInterface
         fun listModels(): String {
             val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val dirPath = prefs.getString(KEY_MODELS_DIR, null) ?: return "[]"

@@ -223,7 +223,9 @@ body {
   margin-bottom: 8px;
 }
 
-.panel-section input {
+.panel-section input,
+.panel-section textarea,
+.panel-section select {
   background: var(--bg-input);
   color: var(--text);
   border: 1px solid var(--border);
@@ -234,6 +236,20 @@ body {
   width: 100%;
 }
 
+.panel-section textarea {
+  resize: vertical;
+}
+
+.checkbox-label {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+}
+
+.checkbox-label input {
+  width: auto;
+}
+
 .row {
   display: flex;
   gap: 8px;
@@ -241,6 +257,31 @@ body {
 }
 
 .row label { flex: 1; margin-bottom: 0; }
+
+.lora-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.lora-row .lora-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lora-row input[type="range"] {
+  flex: 1;
+}
+
+.lora-row .lora-value {
+  width: 34px;
+  text-align: right;
+  color: var(--dim);
+}
 
 .panel-section button {
   background: #1b1f23;
