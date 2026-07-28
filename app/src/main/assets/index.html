@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>llama-webview</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #0d0d0d;
+    color: #e6e6e6;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 14px;
+  }
+  h1 { font-size: 16px; font-weight: 600; color: #39d353; margin: 0 0 16px; }
+  .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  button {
+    background: #1b1f23;
+    color: #e6e6e6;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  button:active { background: #262b30; }
+  pre {
+    background: #111;
+    border: 1px solid #262626;
+    border-radius: 6px;
+    padding: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 60px;
+  }
+  .label { color: #8b949e; margin: 16px 0 4px; }
+  #storage-check { color: #8b949e; }
+  #storage-check.ok { color: #39d353; }
+  #storage-check.fail { color: #f85149; }
+</style>
+</head>
+<body>
+  <h1>llama-webview &mdash; bridge check</h1>
+
+  <div class="row">
+    <button id="btn-list-models">Native.listModels()</button>
+    <button id="btn-server-status">Native.serverStatus()</button>
+    <button id="btn-start-server">Native.startServer()</button>
+    <button id="btn-stop-server">Native.stopServer()</button>
+    <button id="btn-pick-dir">Native.pickModelsDir()</button>
+  </div>
+
+  <div class="label">Last bridge call result:</div>
+  <pre id="output">(nothing yet)</pre>
+
+  <div class="label">localStorage round-trip:</div>
+  <pre id="storage-check">checking&hellip;</pre>
+
+  <script>
+    function show(result) {
+      document.getElementById('output').textContent =
+        typeof result === 'string' ? result : JSON.stringify(result, null, 2);
+    }
+
+    function callBridge(name, ...args) {
+      try {
+        if (!window.Native || typeof window.Native[name] !== 'function') {
+          show('Native.' + name + ' is not available');
+          return;
+        }
+        const result = window.Native[name](...args);
+        show(result === undefined ? '(no return value)' : result);
+      } catch (err) {
+        show('error calling Native.' + name + ': ' + err);
+      }
+    }
+
+    document.getElementById('btn-list-models').addEventListener('click', () => callBridge('listModels'));
+    document.getElementById('btn-server-status').addEventListener('click', () => callBridge('serverStatus'));
+    document.getElementById('btn-start-server').addEventListener('click', () => callBridge('startServer', '{}'));
+    document.getElementById('btn-stop-server').addEventListener('click', () => callBridge('stopServer'));
+    document.getElementById('btn-pick-dir').addEventListener('click', () => callBridge('pickModelsDir'));
+
+    // domStorageEnabled sanity check.
+    (function checkStorage() {
+      const el = document.getElementById('storage-check');
+      try {
+        const key = '__llama_webview_probe__';
+        localStorage.setItem(key, 'ok');
+        const readBack = localStorage.getItem(key);
+        localStorage.removeItem(key);
+        if (readBack === 'ok') {
+          el.textContent = 'localStorage works';
+          el.className = 'ok';
+        } else {
+          el.textContent = 'localStorage read-back mismatch';
+          el.className = 'fail';
+        }
+      } catch (err) {
+        el.textContent = 'localStorage unavailable: ' + err;
+        el.className = 'fail';
+      }
+    })();
+  </script>
+</body>
+</html>

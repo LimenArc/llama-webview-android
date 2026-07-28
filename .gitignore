@@ -1,0 +1,15 @@
+*.iml
+.gradle/
+/local.properties
+.idea/
+.DS_Store
+/build
+/app/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Prebuilt server binary is fetched by CI (or dropped in locally for testing) - never commit
+# a multi-hundred-MB binary to source control.
+/app/src/main/jniLibs/
