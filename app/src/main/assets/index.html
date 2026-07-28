@@ -4,234 +4,71 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>llama-webview</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    padding: 24px;
-    background: #0d0d0d;
-    color: #e6e6e6;
-    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-    font-size: 14px;
-  }
-  h1 { font-size: 16px; font-weight: 600; color: #39d353; margin: 0 0 4px; }
-  h2 { font-size: 13px; font-weight: 600; color: #8b949e; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
-  button {
-    background: #1b1f23;
-    color: #e6e6e6;
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  button:active { background: #262b30; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  input {
-    background: #111;
-    color: #e6e6e6;
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-family: inherit;
-    font-size: 13px;
-  }
-  label { display: flex; flex-direction: column; gap: 4px; color: #8b949e; font-size: 12px; }
-  label input { min-width: 0; }
-  #model-path { flex: 1 1 320px; min-width: 220px; }
-  pre {
-    background: #111;
-    border: 1px solid #262626;
-    border-radius: 6px;
-    padding: 12px;
-    white-space: pre-wrap;
-    word-break: break-word;
-    min-height: 24px;
-    max-height: 260px;
-    overflow-y: auto;
-  }
-  .label { color: #8b949e; margin: 16px 0 4px; }
-  #storage-check.ok, .ok { color: #39d353; }
-  #storage-check.fail, .fail { color: #f85149; }
-  .state-running { color: #39d353; }
-  .state-starting { color: #d29922; }
-  .state-failed { color: #f85149; }
-  .state-stopped { color: #8b949e; }
-  ul#model-list { list-style: none; margin: 0; padding: 0; }
-  ul#model-list li {
-    padding: 6px 8px;
-    border: 1px solid #262626;
-    border-radius: 6px;
-    margin-bottom: 6px;
-    cursor: pointer;
-  }
-  ul#model-list li:hover { background: #1b1f23; }
-</style>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <h1>llama-webview</h1>
-  <div id="storage-check" style="color:#8b949e;">localStorage: checking&hellip;</div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">llama-webview</div>
+      <div class="context-bar" id="context-bar">not connected</div>
+      <button type="button" id="toggle-panel" class="icon-btn" title="Toggle panel">panel</button>
+    </header>
 
-  <h2>Bridge check</h2>
-  <div class="row">
-    <button id="btn-list-models">Native.listModels()</button>
-    <button id="btn-server-status">Native.serverStatus()</button>
+    <main class="layout">
+      <section class="chat-col">
+        <div class="messages" id="messages"></div>
+        <form class="composer" id="composer">
+          <textarea
+            id="composer-input"
+            rows="1"
+            placeholder="Message… (Enter to send, Shift+Enter for newline)"
+          ></textarea>
+          <button type="submit" id="send-btn">Send</button>
+          <button type="button" id="stop-btn" hidden>Stop</button>
+        </form>
+      </section>
+
+      <aside class="side-panel" id="side-panel">
+        <section class="panel-section">
+          <h2>Models directory</h2>
+          <div class="row">
+            <button type="button" id="btn-pick-dir">Pick directory&hellip;</button>
+            <button type="button" id="btn-refresh-models">Refresh</button>
+          </div>
+          <div id="models-dir-label" class="dim">(not picked yet)</div>
+          <ul id="model-list"></ul>
+        </section>
+
+        <section class="panel-section">
+          <h2>Server</h2>
+          <label>model path
+            <input id="model-path" type="text" placeholder="/storage/emulated/0/Models/model.gguf" />
+          </label>
+          <div class="row">
+            <label>port
+              <input id="port" type="number" value="8080" />
+            </label>
+            <label>ctx size
+              <input id="ctx-size" type="number" value="4096" />
+            </label>
+            <label>ngl
+              <input id="ngl" type="number" value="99" />
+            </label>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-start-server">Start</button>
+            <button type="button" id="btn-stop-server">Stop</button>
+          </div>
+          <pre id="status">(not started)</pre>
+          <details>
+            <summary class="dim">Log tail</summary>
+            <pre id="log"></pre>
+          </details>
+        </section>
+      </aside>
+    </main>
   </div>
-  <pre id="output">(nothing yet)</pre>
 
-  <h2>Models directory</h2>
-  <div class="row">
-    <button id="btn-pick-dir">Pick models directory&hellip;</button>
-    <button id="btn-refresh-models">Refresh model list</button>
-    <span id="models-dir-label" style="color:#8b949e;">(not picked yet)</span>
-  </div>
-  <ul id="model-list"></ul>
-
-  <h2>Server control</h2>
-  <div class="row">
-    <label>model path
-      <input id="model-path" type="text" placeholder="/storage/emulated/0/Models/model.gguf" />
-    </label>
-    <label>port
-      <input id="port" type="number" value="8080" style="width:80px;" />
-    </label>
-    <label>ctx size
-      <input id="ctx-size" type="number" value="4096" style="width:90px;" />
-    </label>
-    <label>ngl
-      <input id="ngl" type="number" value="99" style="width:70px;" />
-    </label>
-  </div>
-  <div class="row">
-    <button id="btn-start-server">Start server</button>
-    <button id="btn-stop-server">Stop server</button>
-  </div>
-  <div class="label">Status:</div>
-  <pre id="status">(not started)</pre>
-  <div class="label">Log tail:</div>
-  <pre id="log"></pre>
-
-  <script>
-    function show(result) {
-      document.getElementById('output').textContent =
-        typeof result === 'string' ? result : JSON.stringify(result, null, 2);
-    }
-
-    function callBridge(name, ...args) {
-      try {
-        if (!window.Native || typeof window.Native[name] !== 'function') {
-          show('Native.' + name + ' is not available');
-          return undefined;
-        }
-        return window.Native[name](...args);
-      } catch (err) {
-        show('error calling Native.' + name + ': ' + err);
-        return undefined;
-      }
-    }
-
-    document.getElementById('btn-list-models').addEventListener('click', () => show(callBridge('listModels')));
-    document.getElementById('btn-server-status').addEventListener('click', () => show(callBridge('serverStatus')));
-
-    // domStorageEnabled sanity check.
-    (function checkStorage() {
-      const el = document.getElementById('storage-check');
-      try {
-        const key = '__llama_webview_probe__';
-        localStorage.setItem(key, 'ok');
-        const readBack = localStorage.getItem(key);
-        localStorage.removeItem(key);
-        el.textContent = readBack === 'ok' ? 'localStorage works' : 'localStorage read-back mismatch';
-        el.className = readBack === 'ok' ? 'ok' : 'fail';
-      } catch (err) {
-        el.textContent = 'localStorage unavailable: ' + err;
-        el.className = 'fail';
-      }
-    })();
-
-    // --- models directory + model list -------------------------------------------------
-
-    function renderModelList() {
-      const raw = callBridge('listModels');
-      let models = [];
-      try { models = JSON.parse(raw || '[]'); } catch (e) { /* ignore */ }
-      const list = document.getElementById('model-list');
-      list.innerHTML = '';
-      for (const m of models) {
-        const li = document.createElement('li');
-        const mb = (m.sizeBytes / (1024 * 1024)).toFixed(1);
-        li.textContent = `${m.name} (${mb} MB)`;
-        li.title = m.path;
-        li.addEventListener('click', () => { document.getElementById('model-path').value = m.path; });
-        list.appendChild(li);
-      }
-      if (models.length === 0) {
-        list.innerHTML = '<li style="cursor:default;color:#8b949e;">no .gguf files found</li>';
-      }
-    }
-
-    window.onModelsDirPicked = function (result) {
-      const label = document.getElementById('models-dir-label');
-      if (result && result.path) {
-        label.textContent = result.path;
-        label.className = '';
-        renderModelList();
-      } else {
-        label.textContent = 'error: ' + (result && result.error ? result.error : 'unknown');
-        label.className = 'fail';
-      }
-    };
-
-    document.getElementById('btn-pick-dir').addEventListener('click', () => callBridge('pickModelsDir'));
-    document.getElementById('btn-refresh-models').addEventListener('click', renderModelList);
-
-    // --- server lifecycle ----------------------------------------------------------------
-
-    let pollHandle = null;
-
-    function renderStatus(status) {
-      const el = document.getElementById('status');
-      el.textContent = JSON.stringify(status, null, 2);
-      el.className = 'state-' + status.state;
-    }
-
-    function pollStatus() {
-      const raw = callBridge('serverStatus');
-      let status;
-      try { status = JSON.parse(raw); } catch (e) { return; }
-      renderStatus(status);
-      document.getElementById('log').textContent = callBridge('getLog') || '';
-      document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
-
-      if (status.state === 'starting') {
-        if (!pollHandle) pollHandle = setInterval(pollStatus, 700);
-      } else if (pollHandle) {
-        clearInterval(pollHandle);
-        pollHandle = null;
-      }
-    }
-
-    document.getElementById('btn-start-server').addEventListener('click', () => {
-      const config = {
-        modelPath: document.getElementById('model-path').value.trim(),
-        port: parseInt(document.getElementById('port').value, 10) || 8080,
-        contextSize: parseInt(document.getElementById('ctx-size').value, 10) || 4096,
-        ngl: parseInt(document.getElementById('ngl').value, 10) || 99,
-      };
-      const result = callBridge('startServer', JSON.stringify(config));
-      try { renderStatus(JSON.parse(result)); } catch (e) { /* ignore */ }
-      pollStatus();
-    });
-
-    document.getElementById('btn-stop-server').addEventListener('click', () => {
-      callBridge('stopServer');
-      setTimeout(pollStatus, 300);
-    });
-
-    pollStatus();
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
