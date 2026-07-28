@@ -38,6 +38,10 @@ body {
   align-items: center;
   gap: 12px;
   padding: 10px 14px;
+  /* Extra fixed clearance plus the real safe-area inset (when the WebView reports one) so
+     this stays clear of the status bar/notch regardless of whether the native edge-to-edge
+     handling is actually in effect. */
+  padding-top: calc(28px + env(safe-area-inset-top, 0px));
   border-bottom: 1px solid var(--border);
   background: var(--bg-raised);
   flex: 0 0 auto;
@@ -147,6 +151,9 @@ body {
   display: flex;
   gap: 8px;
   padding: 12px;
+  /* Same reasoning as .topbar's padding-top: clear the nav bar/gesture area regardless of
+     whether the native edge-to-edge handling actually took effect. */
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
   background: var(--bg-raised);
 }
@@ -183,6 +190,9 @@ body {
   background: var(--bg-raised);
   overflow-y: auto;
   padding: 14px;
+  /* So the last bit of scrollable content isn't stuck under the nav bar/gesture area. */
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
   display: flex;
   flex-direction: column;
   gap: 20px;
