@@ -20,6 +20,22 @@ android {
         }
     }
 
+    // CI runs on a fresh machine every time, so without a pinned debug key each build gets
+    // a new random one from a fresh ~/.android/debug.keystore. Android refuses to install an
+    // update whose signature doesn't match the currently-installed app, so that turns every
+    // CI-produced APK into an "uninstall first" situation. Pinning a checked-in debug
+    // keystore keeps every build (CI or local) signed identically so installs always update
+    // cleanly. This key is not a secret - it is Android's own debug keystore convention
+    // (alias/password "android...") and can never be used to sign a release build.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("../keystore/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
