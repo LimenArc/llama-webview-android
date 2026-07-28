@@ -1,19 +1,48 @@
 package com.limenarc.llamaweb
 
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.EditText
+import android.widget.FrameLayout
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var manageStorageLauncher: ActivityResultLauncher<Intent>
+    private lateinit var notificationPermLauncher: ActivityResultLauncher<String>
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        manageStorageLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (hasAllFilesAccess()) {
+                showModelsDirDialog()
+            } else {
+                notifyModelsDirResult(null, "All-files access was not granted")
+            }
+        }
+        notificationPermLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+            // Best-effort: the foreground service still runs without this, it just won't
+            // show a visible notification.
+        }
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -27,14 +56,115 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        // The foreground service exists to survive *backgrounding*; actual destruction means
+        // the user is done with the app, so tear the child process down rather than leak it.
+        LlamaProcessManager.stop()
+        LlamaForegroundService.stop(this)
         webView.destroy()
         super.onDestroy()
     }
 
+    // --- models directory picking -------------------------------------------------------
+
+    fun beginPickModelsDir() {
+        if (!hasAllFilesAccess()) {
+            val intent = try {
+                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
+            } catch (e: ActivityNotFoundException) {
+                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            }
+            manageStorageLauncher.launch(intent)
+            return
+        }
+        showModelsDirDialog()
+    }
+
+    private fun hasAllFilesAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
+    private fun showModelsDirDialog() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val current = prefs.getString(KEY_MODELS_DIR, null) ?: Environment.getExternalStorageDirectory().absolutePath
+
+        val input = EditText(this).apply {
+            setText(current)
+            setSelection(text.length)
+        }
+        val paddingPx = (20 * resources.displayMetrics.density).toInt()
+        val container = FrameLayout(this).apply {
+            setPadding(paddingPx, paddingPx / 2, paddingPx, 0)
+            addView(input)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Models directory")
+            .setMessage("Absolute path to the folder containing your .gguf files")
+            .setView(container)
+            .setPositiveButton("OK") { _, _ ->
+                val path = input.text.toString().trim()
+                val dir = File(path)
+                if (dir.isDirectory && dir.canRead()) {
+                    prefs.edit().putString(KEY_MODELS_DIR, path).apply()
+                    notifyModelsDirResult(path, null)
+                } else {
+                    notifyModelsDirResult(null, "not a readable directory: $path")
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun notifyModelsDirResult(path: String?, error: String?) {
+        val payload = JSONObject().apply {
+            put("path", path)
+            put("error", error)
+        }
+        webView.post {
+            webView.evaluateJavascript("window.onModelsDirPicked && window.onModelsDirPicked($payload);", null)
+        }
+    }
+
+    // --- server lifecycle ------------------------------------------------------------------
+
+    fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    fun dispatchStartServer(modelPath: String, port: Int, contextSize: Int, ngl: Int, loraSpecs: List<Pair<String, Float?>>) {
+        // ActivityResultLauncher.launch() and starting the foreground service both require the
+        // main thread; this is called from the WebView's JS-interface thread, not the UI thread.
+        runOnUiThread {
+            requestNotificationPermissionIfNeeded()
+            LlamaForegroundService.start(this)
+        }
+        Thread(
+            {
+                LlamaProcessManager.start(applicationContext, modelPath, port, contextSize, ngl, loraSpecs)
+                runOnUiThread { LlamaForegroundService.refresh(this) }
+            },
+            "llama-start-dispatch",
+        ).start()
+    }
+
+    fun dispatchStopServer() {
+        Thread(
+            {
+                LlamaProcessManager.stop()
+                runOnUiThread { LlamaForegroundService.refresh(this) }
+            },
+            "llama-stop-dispatch",
+        ).start()
+    }
+
+    companion object {
+        private const val PREFS_NAME = "llama_webview_prefs"
+        private const val KEY_MODELS_DIR = "models_dir"
+    }
+
     /**
-     * Bridge exposed to assets/index.html as `window.Native`. Phase 1 wires the plumbing
-     * only; real implementations land in later phases (server lifecycle, model directory
-     * picker, etc).
+     * Bridge exposed to assets/index.html as `window.Native`.
      *
      * Must not be a private class: WebView's JS bridge invokes these methods via
      * reflection, and a private declaring class can trip IllegalAccessException on some
@@ -44,27 +174,89 @@ class MainActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun listModels(): String {
-            return "[]"
+            val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val dirPath = prefs.getString(KEY_MODELS_DIR, null) ?: return "[]"
+            val root = File(dirPath)
+            if (!root.isDirectory) return "[]"
+
+            val results = JSONArray()
+            root.walkTopDown()
+                .maxDepth(6)
+                .filter { it.isFile && it.extension.equals("gguf", ignoreCase = true) }
+                .forEach { f ->
+                    results.put(
+                        JSONObject().apply {
+                            put("path", f.absolutePath)
+                            put("name", f.name)
+                            put("sizeBytes", f.length())
+                        }
+                    )
+                }
+            return results.toString()
         }
 
         @JavascriptInterface
         fun startServer(configJson: String): String {
-            return """{"ok":false,"error":"not implemented yet"}"""
+            val cfg = try {
+                JSONObject(configJson)
+            } catch (e: Exception) {
+                return errorJson("invalid JSON: ${e.message}")
+            }
+
+            val modelPath = cfg.optString("modelPath", "")
+            if (modelPath.isBlank()) return errorJson("modelPath is required")
+            if (!File(modelPath).canRead()) return errorJson("model file not readable: $modelPath")
+
+            val port = cfg.optInt("port", 8080)
+            val contextSize = cfg.optInt("contextSize", 4096)
+            val ngl = cfg.optInt("ngl", 99)
+
+            val loraSpecs = mutableListOf<Pair<String, Float?>>()
+            cfg.optJSONArray("lora")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val entry = arr.getJSONObject(i)
+                    val path = entry.getString("path")
+                    val scale = if (entry.has("scale") && !entry.isNull("scale")) {
+                        entry.getDouble("scale").toFloat()
+                    } else {
+                        null
+                    }
+                    loraSpecs += path to scale
+                }
+            }
+
+            activity.dispatchStartServer(modelPath, port, contextSize, ngl, loraSpecs)
+            return JSONObject().apply {
+                put("ok", true)
+                put("state", "starting")
+            }.toString()
         }
 
         @JavascriptInterface
         fun stopServer() {
-            // no-op until Phase 2
+            activity.dispatchStopServer()
         }
 
         @JavascriptInterface
         fun serverStatus(): String {
-            return """{"state":"stopped"}"""
+            val status = LlamaProcessManager.status()
+            return JSONObject().apply {
+                put("state", status.state.name.lowercase())
+                put("port", status.port)
+                put("modelPath", status.modelPath)
+                put("error", status.error)
+            }.toString()
         }
 
         @JavascriptInterface
+        fun getLog(): String = LlamaProcessManager.logTail(200)
+
+        @JavascriptInterface
         fun pickModelsDir() {
-            // no-op until Phase 2 (MANAGE_EXTERNAL_STORAGE + directory picker)
+            activity.runOnUiThread { activity.beginPickModelsDir() }
         }
+
+        private fun errorJson(message: String): String =
+            JSONObject().apply { put("ok", false); put("error", message) }.toString()
     }
 }
