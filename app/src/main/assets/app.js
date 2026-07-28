@@ -20,6 +20,7 @@
     contextBar: document.getElementById('context-bar'),
     togglePanel: document.getElementById('toggle-panel'),
     sidePanel: document.getElementById('side-panel'),
+    scrim: document.getElementById('scrim'),
     modelPath: document.getElementById('model-path'),
     port: document.getElementById('port'),
     ctxSize: document.getElementById('ctx-size'),
@@ -319,9 +320,24 @@
   }
   el.composerInput.addEventListener('input', autoResize);
 
+  // Below 900px (effectively every phone, portrait or landscape) the panel is an overlay
+  // drawer rather than a permanent side-by-side column - see the matching CSS breakpoint -
+  // so it should start closed there instead of covering most of the chat on first launch.
+  const isNarrowViewport = () => window.matchMedia('(max-width: 900px)').matches;
+  if (isNarrowViewport()) {
+    el.sidePanel.classList.add('collapsed');
+  }
+
+  function setPanelOpen(open) {
+    el.sidePanel.classList.toggle('collapsed', !open);
+    el.scrim.classList.toggle('visible', open && isNarrowViewport());
+  }
+
   el.togglePanel.addEventListener('click', () => {
-    el.sidePanel.classList.toggle('collapsed');
+    setPanelOpen(el.sidePanel.classList.contains('collapsed'));
   });
+
+  el.scrim.addEventListener('click', () => setPanelOpen(false));
 
   // ---------------------------------------------------------------------
   // Server panel (models directory picking, model list, start/stop, status)

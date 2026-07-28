@@ -281,16 +281,40 @@ body {
 .state-failed { color: var(--error); }
 .state-stopped { color: var(--dim); }
 
-@media (max-width: 720px) {
+.scrim {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 19;
+}
+
+.scrim.visible {
+  display: block;
+}
+
+/* Below this width (covers virtually all phones, portrait or landscape) a permanently
+   visible 320px panel would leave little to no room for the chat column, so the panel
+   becomes a full-height overlay drawer instead: closed by default, slid in over the chat
+   (with a dismissible scrim) rather than squeezed in beside it. */
+@media (max-width: 900px) {
+  /* Same specificity as, and later than, the desktop ".side-panel.collapsed" rule above,
+     so this wins the cascade here and the two collapse mechanisms don't stack. */
+  .side-panel,
+  .side-panel.collapsed {
+    margin-right: 0;
+  }
   .side-panel {
     position: fixed;
+    top: 0;
     right: 0;
-    top: 45px;
     bottom: 0;
-    width: 320px;
-    z-index: 10;
+    width: min(85vw, 340px);
+    z-index: 20;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
   }
-  .side-panel.collapsed {
-    margin-right: -320px;
+  .side-panel:not(.collapsed) {
+    transform: translateX(0);
   }
 }
