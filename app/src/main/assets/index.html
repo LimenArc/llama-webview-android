@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>llama-webview</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">llama-webview</div>
+      <div class="context-bar" id="context-bar">not connected</div>
+      <button type="button" id="toggle-panel" class="icon-btn" title="Toggle panel">panel</button>
+    </header>
+
+    <main class="layout">
+      <section class="chat-col">
+        <div class="messages" id="messages"></div>
+        <form class="composer" id="composer">
+          <button type="button" id="btn-show-panel">Panel</button>
+          <textarea
+            id="composer-input"
+            rows="1"
+            placeholder="Message… (Enter to send, Shift+Enter for newline)"
+          ></textarea>
+          <button type="submit" id="send-btn">Send</button>
+          <button type="button" id="stop-btn" hidden>Stop</button>
+        </form>
+      </section>
+
+      <aside class="side-panel" id="side-panel">
+        <section class="panel-section">
+          <h2>Models directory</h2>
+          <div class="row">
+            <button type="button" id="btn-pick-dir">Pick directory&hellip;</button>
+            <button type="button" id="btn-refresh-models">Refresh</button>
+          </div>
+          <div id="models-dir-label" class="dim">(not picked yet)</div>
+          <ul id="model-list"></ul>
+        </section>
+
+        <section class="panel-section">
+          <h2>Server</h2>
+          <label>model path
+            <input id="model-path" type="text" placeholder="/storage/emulated/0/Models/model.gguf" />
+          </label>
+          <div class="row">
+            <label>port
+              <input id="port" type="number" value="8080" />
+            </label>
+            <label>ctx size
+              <input id="ctx-size" type="number" value="4096" />
+            </label>
+            <label>ngl
+              <input id="ngl" type="number" value="99" />
+            </label>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-start-server">Start</button>
+            <button type="button" id="btn-stop-server">Stop</button>
+            <button type="button" id="btn-hide-panel">Hide panel</button>
+          </div>
+          <pre id="status">(not started)</pre>
+          <details>
+            <summary class="dim">Log tail</summary>
+            <pre id="log"></pre>
+          </details>
+        </section>
+
+        <section class="panel-section">
+          <h2>Model</h2>
+          <pre id="model-details">(not connected)</pre>
+          <details id="chat-template-details" hidden>
+            <summary class="dim">Chat template</summary>
+            <pre id="chat-template"></pre>
+          </details>
+        </section>
+
+        <section class="panel-section">
+          <h2>Sampler</h2>
+          <label>system prompt
+            <textarea id="system-prompt" rows="2" placeholder="(none)"></textarea>
+          </label>
+          <div class="row">
+            <label>temperature
+              <input id="s-temperature" type="number" step="0.05" value="0.8" />
+            </label>
+            <label>top_p
+              <input id="s-top-p" type="number" step="0.05" value="0.95" />
+            </label>
+            <label>top_k
+              <input id="s-top-k" type="number" step="1" value="40" />
+            </label>
+          </div>
+          <div class="row">
+            <label>min_p
+              <input id="s-min-p" type="number" step="0.01" value="0.05" />
+            </label>
+            <label>repeat_penalty
+              <input id="s-repeat-penalty" type="number" step="0.05" value="1.0" />
+            </label>
+          </div>
+          <div class="row">
+            <label>presence_penalty
+              <input id="s-presence-penalty" type="number" step="0.05" value="0" />
+            </label>
+            <label>frequency_penalty
+              <input id="s-frequency-penalty" type="number" step="0.05" value="0" />
+            </label>
+          </div>
+          <div class="row">
+            <label>max_tokens
+              <input id="s-max-tokens" type="number" step="1" value="-1" />
+            </label>
+            <label>seed
+              <input id="s-seed" type="number" step="1" value="-1" />
+            </label>
+          </div>
+          <label>stop sequences (comma-separated)
+            <input id="s-stop" type="text" placeholder="e.g. </s>, [END]" />
+          </label>
+          <label>GBNF grammar
+            <textarea id="s-grammar" rows="2" placeholder="(mutually exclusive with JSON schema)"></textarea>
+          </label>
+          <label>JSON schema
+            <textarea id="s-json-schema" rows="2" placeholder="(mutually exclusive with GBNF grammar)"></textarea>
+          </label>
+        </section>
+
+        <section class="panel-section">
+          <h2>LoRA</h2>
+          <div class="row">
+            <label>mode
+              <select id="lora-mode">
+                <option value="per-request">per-request</option>
+                <option value="global">global</option>
+              </select>
+            </label>
+            <label class="checkbox-label">
+              <input id="lora-bypass" type="checkbox" /> bypass all
+            </label>
+          </div>
+          <div id="lora-list" class="dim">(not connected)</div>
+          <label>adapters to load (one per line: /path/adapter.gguf or /path/adapter.gguf:0.8)
+            <textarea id="lora-load-paths" rows="2"></textarea>
+          </label>
+          <div class="row">
+            <button type="button" id="btn-restart-lora">Restart server with these adapters</button>
+          </div>
+          <div class="dim">Adding an adapter not in the current launch flags requires a server restart.</div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

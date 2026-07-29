@@ -1,0 +1,152 @@
+name: Build
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Bump these to move to a newer llama.cpp release. The cache key below is derived from
+  # the resolved commit, so bumping this automatically invalidates the cross-compile cache.
+  LLAMA_CPP_REPO: https://github.com/ggml-org/llama.cpp.git
+  LLAMA_CPP_REF: b10154
+  NDK_VERSION: r27d
+  ANDROID_PLATFORM: android-28
+  ANDROID_BUILD_TOOLS: '35.0.0'
+  ANDROID_PLATFORM_SDK: 'android-35'
+
+jobs:
+  build-llama-server:
+    name: Cross-compile llama-server (arm64-v8a)
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Resolve pinned llama.cpp commit
+        id: resolve
+        run: |
+          set -euo pipefail
+          SHA=$(git ls-remote "$LLAMA_CPP_REPO" "refs/tags/$LLAMA_CPP_REF" | cut -f1)
+          if [ -z "$SHA" ]; then
+            echo "Could not resolve tag '$LLAMA_CPP_REF' in $LLAMA_CPP_REPO" >&2
+            exit 1
+          fi
+          echo "Resolved $LLAMA_CPP_REF -> $SHA"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Cache cross-compiled server binary
+        id: cache-server
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/llama-out
+          key: llama-server-arm64-v8a-${{ steps.resolve.outputs.sha }}-ndk${{ env.NDK_VERSION }}-${{ env.ANDROID_PLATFORM }}-v1
+
+      - name: Install Android NDK
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: ${{ env.NDK_VERSION }}
+
+      - name: Install Ninja
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Checkout llama.cpp @ ${{ env.LLAMA_CPP_REF }}
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$LLAMA_CPP_REF" "$LLAMA_CPP_REPO" llama.cpp
+
+      - name: Configure (static, no OpenMP, no curl)
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        run: |
+          cmake -S llama.cpp -B llama.cpp/build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM="$ANDROID_PLATFORM" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_STATIC=ON \
+            -DGGML_OPENMP=OFF \
+            -DGGML_NATIVE=OFF \
+            -DLLAMA_CURL=OFF \
+            -DLLAMA_BUILD_TESTS=OFF \
+            -DLLAMA_BUILD_EXAMPLES=OFF \
+            -DLLAMA_BUILD_TOOLS=ON \
+            -DLLAMA_BUILD_SERVER=ON
+
+      # Grammar (GBNF/JSON-schema) and the /lora-adapters REST endpoints are compiled into
+      # llama-server by default at this pin - no extra flags needed to enable them.
+      - name: Build llama-server
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        run: cmake --build llama.cpp/build --target llama-server -j "$(nproc)"
+
+      - name: Stage binary as libllama-server.so
+        if: steps.cache-server.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "${{ runner.temp }}/llama-out"
+          BIN=$(find llama.cpp/build -type f -name llama-server -perm -u+x | head -n1)
+          if [ -z "$BIN" ]; then
+            echo "Could not find built llama-server binary" >&2
+            exit 1
+          fi
+          "${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip" "$BIN"
+          cp "$BIN" "${{ runner.temp }}/llama-out/libllama-server.so"
+
+      - name: Upload server binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: libllama-server-arm64-v8a
+          path: ${{ runner.temp }}/llama-out/libllama-server.so
+          if-no-files-found: error
+          retention-days: 14
+
+  assemble-apk:
+    name: Assemble debug APK
+    needs: build-llama-server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;${{ env.ANDROID_PLATFORM_SDK }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+
+      - name: Download server binary
+        uses: actions/download-artifact@v4
+        with:
+          name: libllama-server-arm64-v8a
+          path: app/src/main/jniLibs/arm64-v8a
+
+      - name: Mark server binary executable
+        run: chmod +x app/src/main/jniLibs/arm64-v8a/libllama-server.so
+
+      - name: Grant execute permission to Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Assemble debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
